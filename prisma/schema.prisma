@@ -1,0 +1,102 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Clientes ─────────────────────────────────────────────────────────────────
+
+model Client {
+  id           Int          @id @default(autoincrement())
+  firstName    String
+  lastName     String
+  email        String?      @unique
+  phone        String?
+  // Empresa y fecha de nacimiento
+  company      String?
+  dob          DateTime?    // date of birth
+  // Domicilio
+  street       String?
+  streetNumber String?
+  apt          String?      // piso/dpto/oficina
+  city         String?
+  postalCode   String?
+  country      String?      @default("Argentina")
+  // Documentos
+  document     String?      // DNI / Pasaporte
+  cuit         String?
+  // Campos CRM
+  status       String       @default("PROSPECT") // PROSPECT | ACTIVE | INACTIVE | SUSPENDED
+  riskProfile  String?                            // CONSERVATIVE | MODERATE | AGGRESSIVE
+  origin       String?      // Cómo llegó (referido, prospección, etc.)
+  notes        String?      // Notas generales del cliente
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  brokerAccounts BrokerAccount[]
+  interactions   Interaction[]
+  tasks          Task[]
+}
+
+// ─── Brokers y Cuentas ─────────────────────────────────────────────────────────
+
+model Broker {
+  id        Int             @id @default(autoincrement())
+  name      String          @unique
+  website   String?
+  createdAt DateTime        @default(now())
+
+  accounts  BrokerAccount[]
+}
+
+model BrokerAccount {
+  id            Int      @id @default(autoincrement())
+  accountNumber String?
+  clientId      Int
+  brokerId      Int
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client  Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  broker  Broker @relation(fields: [brokerId], references: [id])
+}
+
+// ─── Interacciones (llamadas, reuniones, etc.) ────────────────────────────────
+
+model Interaction {
+  id        Int      @id @default(autoincrement())
+  clientId  Int
+  type      String   @default("CALL") // CALL | MEETING | EMAIL | WHATSAPP | OTHER
+  date      DateTime
+  notes     String
+  duration  Int?     // minutos
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client       Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  followUpTask Task?
+}
+
+// ─── Tareas / Agenda ──────────────────────────────────────────────────────────
+
+model Task {
+  id            Int       @id @default(autoincrement())
+  clientId      Int
+  title         String
+  description   String?
+  dueDate       DateTime
+  status        String    @default("PENDING") // PENDING | COMPLETED | CANCELLED
+  interactionId Int?      @unique   // tarea de seguimiento generada desde una interacción
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  client      Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  interaction Interaction? @relation(fields: [interactionId], references: [id])
+}

@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Client" ADD COLUMN "apt" TEXT;
+ALTER TABLE "Client" ADD COLUMN "company" TEXT;
+ALTER TABLE "Client" ADD COLUMN "dob" DATETIME;
