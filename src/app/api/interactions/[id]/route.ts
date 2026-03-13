@@ -10,7 +10,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     where: { id: Number(id) },
     data: {
       ...body,
-      date: body.date ? new Date(body.date) : undefined,
+      date: body.date ? new Date(`${body.date}T12:00:00`) : undefined,
     },
   });
   return NextResponse.json(interaction);

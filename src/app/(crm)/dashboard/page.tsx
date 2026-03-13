@@ -1,201 +1,283 @@
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, PhoneCall, CalendarCheck, AlertCircle } from "lucide-react";
+import { Users, PhoneCall, CalendarCheck, AlertCircle, TrendingUp, Zap, GitBranch } from "lucide-react";
 import Link from "next/link";
 import { format, isToday, isTomorrow } from "date-fns";
 import { es } from "date-fns/locale";
+import { ScoreBadge } from "@/components/score-badge";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [totalClients, activeClients, pendingTasks, recentInteractions, overdueTasks, upcomingTasks] =
-    await Promise.all([
-      prisma.client.count(),
-      prisma.client.count({ where: { status: "ACTIVE" } }),
-      prisma.task.count({ where: { status: "PENDING" } }),
-      prisma.interaction.findMany({
-        take: 5,
-        orderBy: { date: "desc" },
-        include: { client: { select: { id: true, firstName: true, lastName: true } } },
-      }),
-      prisma.task.findMany({
-        where: { status: "PENDING", dueDate: { lt: new Date() } },
-        include: { client: { select: { id: true, firstName: true, lastName: true } } },
-        orderBy: { dueDate: "asc" },
-        take: 5,
-      }),
-      prisma.task.findMany({
-        where: { status: "PENDING", dueDate: { gte: new Date() } },
-        include: { client: { select: { id: true, firstName: true, lastName: true } } },
-        orderBy: { dueDate: "asc" },
-        take: 8,
-      }),
-    ]);
+  const [
+    totalClients,
+    activeClients,
+    pendingTasks,
+    recentInteractions,
+    overdueTasks,
+    upcomingTasks,
+    activeTriggerFirings,
+    activeWorkflowRuns,
+    topClientsByScore,
+  ] = await Promise.all([
+    prisma.client.count(),
+    prisma.client.count({ where: { status: "ACTIVE" } }),
+    prisma.task.count({ where: { status: "PENDING" } }),
+    prisma.interaction.findMany({
+      take: 5,
+      orderBy: { date: "desc" },
+      include: { client: { select: { id: true, firstName: true, lastName: true } } },
+    }),
+    prisma.task.findMany({
+      where: { status: "PENDING", dueDate: { lt: new Date() } },
+      include: { client: { select: { id: true, firstName: true, lastName: true } } },
+      orderBy: { dueDate: "asc" },
+      take: 5,
+    }),
+    prisma.task.findMany({
+      where: { status: "PENDING", dueDate: { gte: new Date() } },
+      include: { client: { select: { id: true, firstName: true, lastName: true } } },
+      orderBy: { dueDate: "asc" },
+      take: 8,
+    }),
+    // Active trigger firings in last 7 days
+    prisma.triggerFiring.count({
+      where: { firedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+    }),
+    prisma.workflowRun.count({ where: { status: "ACTIVE" } }),
+    // Top 5 clients by latest score
+    prisma.client.findMany({
+      where: {
+        contactScores: { some: {} },
+      },
+      include: {
+        contactScores: {
+          orderBy: { calculatedAt: "desc" },
+          take: 1,
+          select: { score: true, explain: true },
+        },
+      },
+      take: 20, // fetch more, sort in memory
+    }),
+  ]);
+
+  // Sort top clients by score descending
+  const top5 = topClientsByScore
+    .filter((c) => c.contactScores[0])
+    .sort((a, b) => (b.contactScores[0]?.score ?? 0) - (a.contactScores[0]?.score ?? 0))
+    .slice(0, 5);
+
+  // Average score
+  const allScores = topClientsByScore.map((c) => c.contactScores[0]?.score ?? 0);
+  const avgScore = allScores.length > 0 ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : null;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Resumen de tu cartera y actividad reciente</p>
-      </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Resumen de tu cartera y actividad reciente</p>
+        </div>
 
-      {/* Métricas */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Clientes</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalClients}</div>
-            <p className="text-xs text-muted-foreground">{activeClients} activos</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tareas Pendientes</CardTitle>
-            <CalendarCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pendingTasks}</div>
-            <p className="text-xs text-muted-foreground">
-              {overdueTasks.length > 0 ? (
-                <span className="text-destructive">{overdueTasks.length} vencidas</span>
-              ) : (
-                "Sin vencidas"
-              )}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Interacciones Recientes</CardTitle>
-            <PhoneCall className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{recentInteractions.length}</div>
-            <p className="text-xs text-muted-foreground">Últimas registradas</p>
-          </CardContent>
-        </Card>
-
-        <Link href="/clients?status=PROSPECT,INACTIVE,SUSPENDED" className="block group">
-          <Card className="group-hover:bg-muted/50 transition-colors cursor-pointer">
+        {/* Métricas */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Prospectos</CardTitle>
-              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Total Clientes</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalClients}</div>
+              <p className="text-xs text-muted-foreground">{activeClients} activos</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tareas Pendientes</CardTitle>
+              <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{pendingTasks}</div>
+              <p className="text-xs text-muted-foreground">
+                {overdueTasks.length > 0 ? (
+                  <span className="text-destructive">{overdueTasks.length} vencidas</span>
+                ) : (
+                  "Sin vencidas"
+                )}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Score Promedio</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {totalClients - activeClients}
+                {avgScore !== null ? avgScore : "—"}
               </div>
-              <p className="text-xs text-muted-foreground">En pipeline → gestionar</p>
+              <p className="text-xs text-muted-foreground">
+                {topClientsByScore.filter((c) => c.contactScores[0]).length} clientes con score
+              </p>
             </CardContent>
           </Card>
-        </Link>
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Tareas vencidas */}
-        {overdueTasks.length > 0 && (
-          <Card className="border-destructive/50">
+          <div className="grid grid-cols-2 gap-4 md:col-span-1">
+            <Link href="/commercial/triggers" className="block group">
+              <Card className="group-hover:bg-muted/50 transition-colors cursor-pointer h-full">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs font-medium">Triggers 7d</CardTitle>
+                  <Zap className="h-3 w-3 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-bold">{activeTriggerFirings}</div>
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/commercial/workflows" className="block group">
+              <Card className="group-hover:bg-muted/50 transition-colors cursor-pointer h-full">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs font-medium">Workflows</CardTitle>
+                  <GitBranch className="h-3 w-3 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-bold">{activeWorkflowRuns}</div>
+                </CardContent>
+              </Card>
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* Top 5 clientes por score */}
+          {top5.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Top clientes por score
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {top5.map((client) => {
+                  const score = client.contactScores[0];
+                  const explain = score?.explain ? JSON.parse(score.explain) : null;
+                  return (
+                    <div key={client.id} className="flex items-center justify-between text-sm">
+                      <Link href={`/clients/${client.id}`} className="font-medium hover:underline">
+                        {client.firstName} {client.lastName}
+                      </Link>
+                      <ScoreBadge score={score?.score ?? null} explain={explain} />
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Tareas vencidas */}
+          {overdueTasks.length > 0 && (
+            <Card className="border-destructive/50">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                  Tareas Vencidas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {overdueTasks.map((task) => (
+                  <div key={task.id} className="flex items-center justify-between text-sm">
+                    <div>
+                      <Link
+                        href={`/clients/${task.clientId}`}
+                        className="font-medium hover:underline"
+                      >
+                        {task.client.firstName} {task.client.lastName}
+                      </Link>
+                      <p className="text-muted-foreground">{task.title}</p>
+                    </div>
+                    <Badge variant="destructive" className="text-xs">
+                      {format(task.dueDate, "d MMM", { locale: es })}
+                    </Badge>
+                  </div>
+                ))}
+                <Link href="/commercial/today" className="text-xs text-muted-foreground hover:underline block mt-2">
+                  Ver acciones del día →
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Próximas tareas */}
+          <Card>
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-destructive" />
-                Tareas Vencidas
+                <CalendarCheck className="h-4 w-4" />
+                Próximas Tareas
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {overdueTasks.map((task) => (
-                <div key={task.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <Link
-                      href={`/clients/${task.clientId}`}
-                      className="font-medium hover:underline"
-                    >
-                      {task.client.firstName} {task.client.lastName}
-                    </Link>
-                    <p className="text-muted-foreground">{task.title}</p>
+              {upcomingTasks.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sin tareas pendientes</p>
+              ) : (
+                upcomingTasks.map((task) => (
+                  <div key={task.id} className="flex items-center justify-between text-sm">
+                    <div>
+                      <Link
+                        href={`/clients/${task.clientId}`}
+                        className="font-medium hover:underline"
+                      >
+                        {task.client.firstName} {task.client.lastName}
+                      </Link>
+                      <p className="text-muted-foreground">{task.title}</p>
+                    </div>
+                    <Badge variant={isToday(task.dueDate) ? "default" : isTomorrow(task.dueDate) ? "secondary" : "outline"} className="text-xs whitespace-nowrap">
+                      {isToday(task.dueDate)
+                        ? "Hoy"
+                        : isTomorrow(task.dueDate)
+                        ? "Mañana"
+                        : format(task.dueDate, "d MMM", { locale: es })}
+                    </Badge>
                   </div>
-                  <Badge variant="destructive" className="text-xs">
-                    {format(task.dueDate, "d MMM", { locale: es })}
-                  </Badge>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
-        )}
 
-        {/* Próximas tareas */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <CalendarCheck className="h-4 w-4" />
-              Próximas Tareas
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {upcomingTasks.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin tareas pendientes</p>
-            ) : (
-              upcomingTasks.map((task) => (
-                <div key={task.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <Link
-                      href={`/clients/${task.clientId}`}
-                      className="font-medium hover:underline"
-                    >
-                      {task.client.firstName} {task.client.lastName}
-                    </Link>
-                    <p className="text-muted-foreground">{task.title}</p>
+          {/* Interacciones recientes */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <PhoneCall className="h-4 w-4" />
+                Últimas Interacciones
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {recentInteractions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sin interacciones registradas</p>
+              ) : (
+                recentInteractions.map((interaction) => (
+                  <div key={interaction.id} className="flex items-center justify-between text-sm">
+                    <div>
+                      <Link
+                        href={`/clients/${interaction.clientId}`}
+                        className="font-medium hover:underline"
+                      >
+                        {interaction.client.firstName} {interaction.client.lastName}
+                      </Link>
+                      <p className="text-muted-foreground line-clamp-1">{interaction.notes}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                      {format(interaction.date, "d MMM", { locale: es })}
+                    </span>
                   </div>
-                  <Badge variant={isToday(task.dueDate) ? "default" : isTomorrow(task.dueDate) ? "secondary" : "outline"} className="text-xs whitespace-nowrap">
-                    {isToday(task.dueDate)
-                      ? "Hoy"
-                      : isTomorrow(task.dueDate)
-                      ? "Mañana"
-                      : format(task.dueDate, "d MMM", { locale: es })}
-                  </Badge>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Interacciones recientes */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <PhoneCall className="h-4 w-4" />
-              Últimas Interacciones
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {recentInteractions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin interacciones registradas</p>
-            ) : (
-              recentInteractions.map((interaction) => (
-                <div key={interaction.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <Link
-                      href={`/clients/${interaction.clientId}`}
-                      className="font-medium hover:underline"
-                    >
-                      {interaction.client.firstName} {interaction.client.lastName}
-                    </Link>
-                    <p className="text-muted-foreground line-clamp-1">{interaction.notes}</p>
-                  </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                    {format(interaction.date, "d MMM", { locale: es })}
-                  </span>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
   );
 }

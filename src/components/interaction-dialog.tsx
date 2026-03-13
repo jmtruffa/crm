@@ -32,7 +32,7 @@ export function InteractionDialog({ clientId }: Props) {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     type: "CALL",
-    date: new Date().toISOString().slice(0, 16),
+    date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
     notes: "",
     duration: "",
     followUpDate: "",
@@ -69,7 +69,7 @@ export function InteractionDialog({ clientId }: Props) {
       setOpen(false);
       setForm({
         type: "CALL",
-        date: new Date().toISOString().slice(0, 16),
+        date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
         notes: "",
         duration: "",
         followUpDate: "",

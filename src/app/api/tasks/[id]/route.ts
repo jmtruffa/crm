@@ -10,7 +10,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     where: { id: Number(id) },
     data: {
       ...body,
-      dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+      dueDate: body.dueDate ? new Date(`${body.dueDate}T12:00:00`) : undefined,
     },
     include: {
       client: { select: { id: true, firstName: true, lastName: true } },

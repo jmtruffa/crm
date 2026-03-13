@@ -5,16 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Pencil, Phone, Mail, MapPin, FileText, Building2, Briefcase, Cake, ChevronLeft, ChevronRight } from "lucide-react";
-import { CLIENT_STATUS, RISK_PROFILE, INTERACTION_TYPE } from "@/lib/constants";
+import {
+  Pencil, Phone, Mail, MapPin, FileText, Building2, Briefcase, Cake,
+  ChevronLeft, ChevronRight, TrendingUp, DollarSign,
+} from "lucide-react";
+import {
+  CLIENT_STATUS, RISK_PROFILE, INTERACTION_TYPE,
+  COMMERCIAL_SUBSTATE, SOURCE_CHANNEL, OBJECTION_CODE,
+} from "@/lib/constants";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+
+const bsAs = (d: Date) => new Date(d.getTime() - 3 * 60 * 60 * 1000);
 import { InteractionDialog } from "@/components/interaction-dialog";
 import { TaskDialog } from "@/components/task-dialog";
 import { BrokerAccountDialog } from "@/components/broker-account-dialog";
 import { DeleteClientButton } from "@/components/delete-client-button";
 import { CompleteTaskButton } from "@/components/complete-task-button";
 import { MarkdownDisplay } from "@/components/markdown-display";
+import { ScoreBadge } from "@/components/score-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +32,10 @@ const statusVariant: Record<string, "default" | "secondary" | "outline" | "destr
   PROSPECT: "secondary",
   INACTIVE: "outline",
   SUSPENDED: "destructive",
+};
+
+const statusClass: Record<string, string> = {
+  ACTIVE: "bg-emerald-500 hover:bg-emerald-500/90 text-white border-transparent",
 };
 
 type Props = {
@@ -42,6 +55,8 @@ export default async function ClientDetailPage({ params, searchParams }: Props) 
         include: { followUpTask: true },
       },
       tasks: { orderBy: { dueDate: "asc" } },
+      pipelineMemberships: { include: { stage: { include: { pipeline: true } } } },
+      contactScores: { orderBy: { calculatedAt: "desc" }, take: 1 },
     },
   });
 
@@ -49,8 +64,9 @@ export default async function ClientDetailPage({ params, searchParams }: Props) 
 
   const pendingTasks = client.tasks.filter((t) => t.status === "PENDING");
   const completedTasks = client.tasks.filter((t) => t.status !== "PENDING");
-
   const brokers = await prisma.broker.findMany({ orderBy: { name: "asc" } });
+  const latestScore = client.contactScores[0] ?? null;
+  const scoreExplain = latestScore ? JSON.parse(latestScore.explain) : null;
 
   // Prev/next navigation when coming from a filtered list
   let prevClient: { id: number; firstName: string; lastName: string } | null = null;
@@ -125,13 +141,19 @@ export default async function ClientDetailPage({ params, searchParams }: Props) 
             <h1 className="text-2xl font-bold tracking-tight">
               {client.firstName} {client.lastName}
             </h1>
-            <Badge variant={statusVariant[client.status] ?? "outline"}>
+            <Badge
+              variant={statusVariant[client.status] ?? "outline"}
+              className={statusClass[client.status]}
+            >
               {CLIENT_STATUS[client.status as keyof typeof CLIENT_STATUS] ?? client.status}
             </Badge>
             {client.riskProfile && (
               <Badge variant="outline">
                 {RISK_PROFILE[client.riskProfile as keyof typeof RISK_PROFILE]}
               </Badge>
+            )}
+            {latestScore && (
+              <ScoreBadge score={latestScore.score} explain={scoreExplain} />
             )}
           </div>
           {client.origin && (
@@ -221,6 +243,129 @@ export default async function ClientDetailPage({ params, searchParams }: Props) 
           </CardContent>
         </Card>
 
+        {/* Datos Comerciales */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Datos Comerciales
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {client.commercialSubstate && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subestado</span>
+                <span>{COMMERCIAL_SUBSTATE[client.commercialSubstate as keyof typeof COMMERCIAL_SUBSTATE] ?? client.commercialSubstate}</span>
+              </div>
+            )}
+            {client.sourceChannel && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Canal</span>
+                <span>{SOURCE_CHANNEL[client.sourceChannel as keyof typeof SOURCE_CHANNEL] ?? client.sourceChannel}</span>
+              </div>
+            )}
+            {client.aumCurrent !== null && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">AUM actual</span>
+                <span className="font-medium">
+                  USD {client.aumCurrent.toLocaleString("es-AR")}
+                </span>
+              </div>
+            )}
+            {client.aumEstimated !== null && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">AUM estimado</span>
+                <span>USD {client.aumEstimated.toLocaleString("es-AR")}</span>
+              </div>
+            )}
+            {client.lastOperationAt && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Última operación</span>
+                <span>{format(client.lastOperationAt, "d MMM yyyy", { locale: es })}</span>
+              </div>
+            )}
+            {client.lastFundingAt && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Última acreditación</span>
+                <span>{format(client.lastFundingAt, "d MMM yyyy", { locale: es })}</span>
+              </div>
+            )}
+            {client.lastInteractionAt && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Último contacto</span>
+                <span>{format(client.lastInteractionAt, "d MMM yyyy", { locale: es })}</span>
+              </div>
+            )}
+            {client.objectionCode && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Objeción</span>
+                <span>{OBJECTION_CODE[client.objectionCode as keyof typeof OBJECTION_CODE] ?? client.objectionCode}</span>
+              </div>
+            )}
+            {client.pipelineMemberships[0] && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Pipeline</span>
+                <span className="font-medium">{client.pipelineMemberships[0].stage.name}</span>
+              </div>
+            )}
+            {!client.commercialSubstate && !client.aumCurrent && !client.sourceChannel && (
+              <p className="text-muted-foreground">Sin datos comerciales</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Score comercial */}
+        {latestScore && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Score Comercial
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-center gap-3">
+                <ScoreBadge score={latestScore.score} explain={scoreExplain} />
+                <span className="text-muted-foreground text-xs">
+                  Calculado {format(latestScore.calculatedAt, "d MMM HH:mm", { locale: es })}
+                </span>
+              </div>
+              {scoreExplain && (
+                <div className="space-y-1 mt-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Base</span>
+                    <span>{scoreExplain.base}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Interacción</span>
+                    <span className={scoreExplain.interactionPenalty < 0 ? "text-red-500" : "text-green-500"}>
+                      {scoreExplain.interactionPenalty}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Operación</span>
+                    <span className={scoreExplain.operationPenalty < 0 ? "text-red-500" : "text-green-500"}>
+                      {scoreExplain.operationPenalty}
+                    </span>
+                  </div>
+                  {scoreExplain.aumBonus > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">AUM bonus</span>
+                      <span className="text-green-500">+{scoreExplain.aumBonus}</span>
+                    </div>
+                  )}
+                  {scoreExplain.referralBonus > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Referido</span>
+                      <span className="text-green-500">+{scoreExplain.referralBonus}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Cuentas en brokers */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -287,12 +432,18 @@ export default async function ClientDetailPage({ params, searchParams }: Props) 
                 className="flex items-start justify-between rounded-md border p-3 text-sm"
               >
                 <div>
-                  <div className="font-medium">{task.title}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium">{task.title}</div>
+                    {task.priority <= 2 && (
+                      <Badge variant="destructive" className="text-xs">P{task.priority}</Badge>
+                    )}
+                  </div>
                   {task.description && (
                     <div className="text-muted-foreground mt-0.5">{task.description}</div>
                   )}
                   <div className="text-xs text-muted-foreground mt-1">
                     Vence: {format(task.dueDate, "d 'de' MMMM yyyy", { locale: es })}
+                    {task.taskType && <span className="ml-2 capitalize">{task.taskType.toLowerCase().replace("_", " ")}</span>}
                   </div>
                 </div>
                 <CompleteTaskButton taskId={task.id} currentStatus="PENDING" />
@@ -322,15 +473,23 @@ export default async function ClientDetailPage({ params, searchParams }: Props) 
                       {INTERACTION_TYPE[interaction.type as keyof typeof INTERACTION_TYPE] ?? interaction.type}
                     </Badge>
                     <span className="text-sm font-medium">
-                      {format(interaction.date, "d 'de' MMMM yyyy, HH:mm", { locale: es })}
+                      {format(bsAs(interaction.date), "d 'de' MMMM yyyy, HH:mm", { locale: es })}
                     </span>
                     {interaction.duration && (
                       <span className="text-xs text-muted-foreground">
                         ({interaction.duration} min)
                       </span>
                     )}
+                    {interaction.direction && (
+                      <Badge variant="secondary" className="text-xs">
+                        {interaction.direction === "INBOUND" ? "Entrante" : "Saliente"}
+                      </Badge>
+                    )}
                   </div>
                 </div>
+                {interaction.subject && (
+                  <p className="text-sm font-medium text-muted-foreground">{interaction.subject}</p>
+                )}
                 <MarkdownDisplay content={interaction.notes} />
                 {interaction.followUpTask && (
                   <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1 inline-flex items-center gap-1">

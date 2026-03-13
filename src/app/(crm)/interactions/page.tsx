@@ -4,6 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { INTERACTION_TYPE } from "@/lib/constants";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+
+// Shift UTC date to Buenos Aires (UTC-3) for display
+const bsAs = (d: Date) => new Date(d.getTime() - 3 * 60 * 60 * 1000);
 import { MarkdownDisplay } from "@/components/markdown-display";
 import { InteractionsFilter } from "@/components/interactions-filter";
 
@@ -103,8 +106,8 @@ export default async function InteractionsPage({ searchParams }: Props) {
                   )}
                 </div>
                 <div className="text-right text-sm text-muted-foreground whitespace-nowrap shrink-0">
-                  <div>{format(interaction.date, "d MMM yyyy", { locale: es })}</div>
-                  <div className="text-xs">{format(interaction.date, "HH:mm")}</div>
+                  <div>{format(bsAs(interaction.date), "d MMM yyyy", { locale: es })}</div>
+                  <div className="text-xs">{format(bsAs(interaction.date), "HH:mm")}</div>
                 </div>
               </div>
             </div>

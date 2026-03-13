@@ -13,35 +13,51 @@ datasource db {
 // ─── Clientes ─────────────────────────────────────────────────────────────────
 
 model Client {
-  id           Int          @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   firstName    String
   lastName     String
-  email        String?      @unique
+  email        String?   @unique
   phone        String?
   // Empresa y fecha de nacimiento
   company      String?
-  dob          DateTime?    // date of birth
+  dob          DateTime? // date of birth
   // Domicilio
   street       String?
   streetNumber String?
-  apt          String?      // piso/dpto/oficina
+  apt          String?   // piso/dpto/oficina
   city         String?
   postalCode   String?
-  country      String?      @default("Argentina")
+  country      String?   @default("Argentina")
   // Documentos
-  document     String?      // DNI / Pasaporte
+  document     String?   // DNI / Pasaporte
   cuit         String?
   // Campos CRM
-  status       String       @default("PROSPECT") // PROSPECT | ACTIVE | INACTIVE | SUSPENDED
-  riskProfile  String?                            // CONSERVATIVE | MODERATE | AGGRESSIVE
-  origin       String?      // Cómo llegó (referido, prospección, etc.)
-  notes        String?      // Notas generales del cliente
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  status       String    @default("PROSPECT") // PROSPECT | ACTIVE | INACTIVE | SUSPENDED
+  riskProfile  String?                         // CONSERVATIVE | MODERATE | AGGRESSIVE
+  origin       String?   // Cómo llegó (referido, prospección, etc.)
+  notes        String?   // Notas generales del cliente
+  // ── Campos comerciales ────────────────────────────────────────────────────
+  commercialSubstate String? // NURTURING | FIRST_CONTACT | PROPOSAL_SENT | NEGOTIATION | CONVERTED | LOST
+  aumCurrent         Float?
+  aumEstimated       Float?
+  lastOperationAt    DateTime?
+  lastFundingAt      DateTime?
+  lastInteractionAt  DateTime?
+  objectionCode      String?  // PRICE | TRUST | TIMING | COMPETITOR | OTHER
+  sourceChannel      String?  // REFERRAL | COLD_CALL | SOCIAL | EVENT | INBOUND | OTHER
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  brokerAccounts BrokerAccount[]
-  interactions   Interaction[]
-  tasks          Task[]
+  brokerAccounts      BrokerAccount[]
+  interactions        Interaction[]
+  tasks               Task[]
+  pipelineMemberships PipelineMembership[]
+  stageHistory        PipelineStageHistory[]
+  referralsGiven      Referral[]             @relation("Referrer")
+  referralsReceived   Referral[]             @relation("Referred")
+  contactScores       ContactScore[]
+  triggerFirings      TriggerFiring[]
+  workflowRuns        WorkflowRun[]
 }
 
 // ─── Brokers y Cuentas ─────────────────────────────────────────────────────────
@@ -77,6 +93,9 @@ model Interaction {
   date      DateTime
   notes     String
   duration  Int?     // minutos
+  direction String?  // OUTBOUND | INBOUND
+  subject   String?
+  outcome   String?  // NO_RESPONSE | REPLIED | MEETING_BOOKED | NOT_INTERESTED | OTHER
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -87,16 +106,169 @@ model Interaction {
 // ─── Tareas / Agenda ──────────────────────────────────────────────────────────
 
 model Task {
-  id            Int       @id @default(autoincrement())
-  clientId      Int
-  title         String
-  description   String?
-  dueDate       DateTime
-  status        String    @default("PENDING") // PENDING | COMPLETED | CANCELLED
-  interactionId Int?      @unique   // tarea de seguimiento generada desde una interacción
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              Int       @id @default(autoincrement())
+  clientId        Int
+  title           String
+  description     String?
+  dueDate         DateTime
+  status          String    @default("PENDING") // PENDING | COMPLETED | CANCELLED
+  interactionId   Int?      @unique              // tarea de seguimiento generada desde una interacción
+  taskType        String?   // FOLLOW_UP | CALL | MEETING | DOCUMENT | ONBOARDING | OTHER
+  priority        Int       @default(3)          // 1 alta — 5 baja
+  aiSuggestion    String?
+  triggerFiringId Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  client      Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  interaction Interaction? @relation(fields: [interactionId], references: [id])
+  client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  interaction   Interaction?   @relation(fields: [interactionId], references: [id])
+  triggerFiring TriggerFiring? @relation(fields: [triggerFiringId], references: [id])
+}
+
+// ─── Pipeline ─────────────────────────────────────────────────────────────────
+
+model Pipeline {
+  id        Int             @id @default(autoincrement())
+  name      String
+  createdAt DateTime        @default(now())
+
+  stages PipelineStage[]
+}
+
+model PipelineStage {
+  id         Int      @id @default(autoincrement())
+  pipelineId Int
+  name       String
+  position   Int
+  createdAt  DateTime @default(now())
+
+  pipeline      Pipeline             @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  memberships   PipelineMembership[]
+  historiesFrom PipelineStageHistory[] @relation("HistoryFrom")
+  historiesTo   PipelineStageHistory[] @relation("HistoryTo")
+}
+
+model PipelineMembership {
+  id        Int      @id @default(autoincrement())
+  clientId  Int      @unique
+  stageId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  stage  PipelineStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+}
+
+model PipelineStageHistory {
+  id          Int      @id @default(autoincrement())
+  clientId    Int
+  fromStageId Int?
+  toStageId   Int
+  movedAt     DateTime @default(now())
+
+  client    Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fromStage PipelineStage? @relation("HistoryFrom", fields: [fromStageId], references: [id])
+  toStage   PipelineStage  @relation("HistoryTo", fields: [toStageId], references: [id])
+}
+
+model Referral {
+  id         Int      @id @default(autoincrement())
+  referrerId Int
+  referredId Int
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  referrer Client @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred Client @relation("Referred", fields: [referredId], references: [id], onDelete: Cascade)
+}
+
+// ─── Triggers ─────────────────────────────────────────────────────────────────
+
+model Trigger {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique
+  name          String
+  description   String?
+  conditionType String   // NO_OP_DAYS | NO_FUND_DAYS | NO_CONTACT_DAYS | ANNIVERSARY_MONTHS | CONTENT_ENGAGED
+  conditionDays Int?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  firings TriggerFiring[]
+}
+
+model TriggerFiring {
+  id        Int      @id @default(autoincrement())
+  triggerId Int
+  clientId  Int
+  firedAt   DateTime @default(now())
+
+  trigger Trigger @relation(fields: [triggerId], references: [id])
+  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+}
+
+// ─── Scores ───────────────────────────────────────────────────────────────────
+
+model ContactScore {
+  id           Int      @id @default(autoincrement())
+  clientId     Int
+  score        Float
+  explain      String   // JSON serializado como String
+  calculatedAt DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+// ─── Templates ────────────────────────────────────────────────────────────────
+
+model Template {
+  id        Int      @id @default(autoincrement())
+  name      String
+  subject   String?
+  body      String
+  variables String?  // JSON: lista de variables usadas
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Workflows ────────────────────────────────────────────────────────────────
+
+model Workflow {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  steps WorkflowStep[]
+  runs  WorkflowRun[]
+}
+
+model WorkflowStep {
+  id          Int      @id @default(autoincrement())
+  workflowId  Int
+  position    Int
+  title       String
+  description String?
+  taskType    String?
+  delayDays   Int      @default(0)
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowRun {
+  id          Int      @id @default(autoincrement())
+  workflowId  Int
+  clientId    Int
+  currentStep Int      @default(0)
+  status      String   @default("ACTIVE") // ACTIVE | COMPLETED | CANCELLED
+  startedAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }

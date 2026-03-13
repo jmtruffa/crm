@@ -15,7 +15,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { CLIENT_STATUS, RISK_PROFILE } from "@/lib/constants";
+import {
+  CLIENT_STATUS,
+  RISK_PROFILE,
+  COMMERCIAL_SUBSTATE,
+  SOURCE_CHANNEL,
+  OBJECTION_CODE,
+} from "@/lib/constants";
 
 type ClientFormData = {
   firstName: string;
@@ -36,6 +42,14 @@ type ClientFormData = {
   riskProfile: string;
   origin: string;
   notes: string;
+  // Commercial
+  commercialSubstate: string;
+  aumCurrent: string;
+  aumEstimated: string;
+  lastOperationAt: string;
+  lastFundingAt: string;
+  sourceChannel: string;
+  objectionCode: string;
 };
 
 const defaults: ClientFormData = {
@@ -57,6 +71,13 @@ const defaults: ClientFormData = {
   riskProfile: "",
   origin: "",
   notes: "",
+  commercialSubstate: "",
+  aumCurrent: "",
+  aumEstimated: "",
+  lastOperationAt: "",
+  lastFundingAt: "",
+  sourceChannel: "",
+  objectionCode: "",
 };
 
 type Props = {
@@ -81,7 +102,12 @@ export function ClientForm({ initialData }: Props) {
     setLoading(true);
 
     const payload = Object.fromEntries(
-      Object.entries(form).map(([k, v]) => [k, v === "" ? null : v])
+      Object.entries(form).map(([k, v]) => {
+        if (v === "") return [k, null];
+        // Convert numeric fields
+        if (k === "aumCurrent" || k === "aumEstimated") return [k, v ? Number(v) : null];
+        return [k, v];
+      })
     );
 
     try {
@@ -224,6 +250,108 @@ export function ClientForm({ initialData }: Props) {
           <div className="space-y-2 col-span-2">
             <Label htmlFor="notes">Notas generales</Label>
             <Textarea id="notes" value={form.notes} onChange={set("notes")} rows={3} />
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Datos Comerciales */}
+      <div className="space-y-4">
+        <h2 className="text-base font-semibold">Datos Comerciales</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Subestado comercial</Label>
+            <Select
+              value={form.commercialSubstate || "NONE"}
+              onValueChange={(v) => setSelect("commercialSubstate")(v === "NONE" ? "" : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sin definir" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NONE">Sin definir</SelectItem>
+                {Object.entries(COMMERCIAL_SUBSTATE).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Canal de origen</Label>
+            <Select
+              value={form.sourceChannel || "NONE"}
+              onValueChange={(v) => setSelect("sourceChannel")(v === "NONE" ? "" : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sin definir" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NONE">Sin definir</SelectItem>
+                {Object.entries(SOURCE_CHANNEL).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="aumCurrent">AUM actual (USD)</Label>
+            <Input
+              id="aumCurrent"
+              type="number"
+              min="0"
+              step="1000"
+              value={form.aumCurrent}
+              onChange={set("aumCurrent")}
+              placeholder="0"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="aumEstimated">AUM estimado (USD)</Label>
+            <Input
+              id="aumEstimated"
+              type="number"
+              min="0"
+              step="1000"
+              value={form.aumEstimated}
+              onChange={set("aumEstimated")}
+              placeholder="0"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="lastOperationAt">Última operación</Label>
+            <Input
+              id="lastOperationAt"
+              type="date"
+              value={form.lastOperationAt}
+              onChange={set("lastOperationAt")}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="lastFundingAt">Última acreditación</Label>
+            <Input
+              id="lastFundingAt"
+              type="date"
+              value={form.lastFundingAt}
+              onChange={set("lastFundingAt")}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Objeción</Label>
+            <Select
+              value={form.objectionCode || "NONE"}
+              onValueChange={(v) => setSelect("objectionCode")(v === "NONE" ? "" : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sin definir" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NONE">Sin definir</SelectItem>
+                {Object.entries(OBJECTION_CODE).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>

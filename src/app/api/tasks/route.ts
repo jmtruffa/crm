@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   const task = await prisma.task.create({
     data: {
       ...body,
-      dueDate: new Date(body.dueDate),
+      dueDate: new Date(`${body.dueDate}T12:00:00`),
     },
     include: {
       client: { select: { id: true, firstName: true, lastName: true } },

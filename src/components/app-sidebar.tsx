@@ -8,6 +8,11 @@ import {
   PhoneCall,
   CalendarCheck,
   Building2,
+  Kanban,
+  Zap,
+  FileText,
+  ListTodo,
+  GitBranch,
 } from "lucide-react";
 import {
   Sidebar,
@@ -22,12 +27,20 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-const navItems = [
+const mainNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clientes", icon: Users },
   { href: "/interactions", label: "Interacciones", icon: PhoneCall },
   { href: "/tasks", label: "Agenda", icon: CalendarCheck },
   { href: "/brokers", label: "Brokers", icon: Building2 },
+  { href: "/pipeline", label: "Pipeline", icon: Kanban },
+];
+
+const commercialNavItems = [
+  { href: "/commercial/today", label: "Acciones del día", icon: ListTodo },
+  { href: "/commercial/triggers", label: "Triggers", icon: Zap },
+  { href: "/commercial/templates", label: "Templates", icon: FileText },
+  { href: "/commercial/workflows", label: "Workflows", icon: GitBranch },
 ];
 
 export function AppSidebar() {
@@ -52,7 +65,28 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navegación</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {mainNavItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))}
+                  >
+                    <Link href={item.href}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Comercial</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {commercialNavItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     asChild
@@ -71,7 +105,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t p-4">
-        <p className="text-xs text-muted-foreground">v1.0.0</p>
+        <p className="text-xs text-muted-foreground">v2.0.0</p>
       </SidebarFooter>
     </Sidebar>
   );
