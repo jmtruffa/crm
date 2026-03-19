@@ -79,6 +79,15 @@ export default async function TriggersPage() {
                   {trigger.conditionDays && <span> — {trigger.conditionDays} días</span>}
                 </div>
 
+                <div className="flex justify-end">
+                  <Link
+                    href={`/commercial/triggers/${trigger.id}/clients`}
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    Ver clientes →
+                  </Link>
+                </div>
+
                 {trigger.firings.length > 0 && (
                   <div>
                     <p className="text-xs font-medium mb-1">Últimas activaciones:</p>

@@ -29,11 +29,11 @@ const statusClass: Record<string, string> = {
 };
 
 type Props = {
-  searchParams: Promise<{ search?: string; status?: string }>;
+  searchParams: Promise<{ search?: string; status?: string; sort?: string }>;
 };
 
 export default async function ClientsPage({ searchParams }: Props) {
-  const { search = "", status = "" } = await searchParams;
+  const { search = "", status = "", sort = "" } = await searchParams;
 
   // Support comma-separated statuses (e.g. "PROSPECT,INACTIVE,SUSPENDED")
   const statuses = status ? status.split(",").filter(Boolean) : [];
@@ -68,15 +68,24 @@ export default async function ClientsPage({ searchParams }: Props) {
         select: { score: true, explain: true },
       },
     },
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    orderBy: sort === "score" ? undefined : [{ lastName: "asc" }, { firstName: "asc" }],
   });
+
+  if (sort === "score") {
+    clients.sort(
+      (a, b) => (b.contactScores[0]?.score ?? -1) - (a.contactScores[0]?.score ?? -1)
+    );
+  }
 
   return (
     <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Clientes</h1>
-            <p className="text-muted-foreground">{clients.length} clientes encontrados</p>
+            <p className="text-muted-foreground">
+              {clients.length} clientes encontrados
+              {sort === "score" && " · ordenados por score"}
+            </p>
           </div>
           <Button asChild>
             <Link href="/clients/new">

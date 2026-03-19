@@ -20,16 +20,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { INTERACTION_TYPE } from "@/lib/constants";
-import { Plus } from "lucide-react";
+import { Plus, CalendarDays } from "lucide-react";
 import { MarkdownEditor } from "@/components/markdown-editor";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
-type Props = { clientId: number };
+type ClientOption = { id: number; firstName: string; lastName: string };
 
-export function InteractionDialog({ clientId }: Props) {
+type Props =
+  | { clientId: number; clients?: never }
+  | { clientId?: undefined; clients: ClientOption[] };
+
+export function InteractionDialog({ clientId, clients }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [form, setForm] = useState({
     type: "CALL",
     date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
@@ -43,8 +54,25 @@ export function InteractionDialog({ clientId }: Props) {
     e: React.ChangeEvent<HTMLInputElement>
   ) => setForm((p) => ({ ...p, [field]: e.target.value }));
 
+  function resetForm() {
+    setSelectedClientId("");
+    setForm({
+      type: "CALL",
+      date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+      notes: "",
+      duration: "",
+      followUpDate: "",
+      followUpTitle: "",
+    });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const effectiveClientId = clientId ?? (selectedClientId ? Number(selectedClientId) : null);
+    if (!effectiveClientId) {
+      toast.error("Seleccioná un cliente");
+      return;
+    }
     if (!form.notes.trim()) {
       toast.error("Las notas son obligatorias");
       return;
@@ -55,7 +83,7 @@ export function InteractionDialog({ clientId }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId,
+          clientId: effectiveClientId,
           type: form.type,
           date: form.date,
           notes: form.notes,
@@ -67,14 +95,7 @@ export function InteractionDialog({ clientId }: Props) {
       if (!res.ok) throw new Error();
       toast.success("Interacción registrada");
       setOpen(false);
-      setForm({
-        type: "CALL",
-        date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
-        notes: "",
-        duration: "",
-        followUpDate: "",
-        followUpTitle: "",
-      });
+      resetForm();
       router.refresh();
     } catch {
       toast.error("Error al guardar la interacción");
@@ -83,12 +104,16 @@ export function InteractionDialog({ clientId }: Props) {
     }
   }
 
+  const followUpSelected = form.followUpDate
+    ? new Date(form.followUpDate + "T12:00:00")
+    : undefined;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
       <DialogTrigger asChild>
         <Button size="sm">
           <Plus className="h-4 w-4 mr-1" />
-          Nueva interacción
+          {clientId ? "Nueva interacción" : "Agregar interacción"}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -96,6 +121,25 @@ export function InteractionDialog({ clientId }: Props) {
           <DialogTitle>Registrar Interacción</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Selector de cliente (solo cuando se usa sin clientId) */}
+          {!clientId && clients && (
+            <div className="space-y-2">
+              <Label>Cliente *</Label>
+              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccioná un cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.lastName}, {c.firstName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Tipo</Label>
@@ -158,13 +202,37 @@ export function InteractionDialog({ clientId }: Props) {
             </Label>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="followUpDate" className="text-xs">Fecha del seguimiento</Label>
-                <Input
-                  id="followUpDate"
-                  type="date"
-                  value={form.followUpDate}
-                  onChange={set("followUpDate")}
-                />
+                <Label className="text-xs">Fecha del seguimiento</Label>
+                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !form.followUpDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarDays className="mr-2 h-4 w-4" />
+                      {form.followUpDate
+                        ? format(followUpSelected!, "d 'de' MMMM yyyy", { locale: es })
+                        : "Seleccionar fecha"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={followUpSelected}
+                      onSelect={(date) => {
+                        setForm((p) => ({
+                          ...p,
+                          followUpDate: date ? format(date, "yyyy-MM-dd") : "",
+                        }));
+                        setCalendarOpen(false);
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="followUpTitle" className="text-xs">Título de la tarea</Label>

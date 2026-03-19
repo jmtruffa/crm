@@ -9,6 +9,7 @@ import { es } from "date-fns/locale";
 const bsAs = (d: Date) => new Date(d.getTime() - 3 * 60 * 60 * 1000);
 import { MarkdownDisplay } from "@/components/markdown-display";
 import { InteractionsFilter } from "@/components/interactions-filter";
+import { InteractionDialog } from "@/components/interaction-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -54,11 +55,14 @@ export default async function InteractionsPage({ searchParams }: Props) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Interacciones</h1>
-        <p className="text-muted-foreground">
-          {interactions.length} resultado{interactions.length !== 1 ? "s" : ""}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Interacciones</h1>
+          <p className="text-muted-foreground">
+            {interactions.length} resultado{interactions.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <InteractionDialog clients={clients} />
       </div>
 
       <InteractionsFilter
